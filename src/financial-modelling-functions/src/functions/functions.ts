@@ -64,3 +64,14 @@ export function logMessage(message: string): string {
 
   return message;
 }
+
+/**
+ * Adds two numbers.
+ * @customfunction
+ * @param first First number
+ * @param second Second number
+ * @returns The sum of the two numbers.
+ */
+export function addTwoNumbers3(first: number, second: number): number {
+  return first + second;
+}
