@@ -4,6 +4,9 @@
 // import { enqueueLookup } from "./getFinancials";
 import * as Helpers from "./helperFunctions";
 
+const queue: Array<{ key: any; year: any; resolve: (value: number) => void; reject: (reason?: any) => void }> = [];
+let isProcessing = false;
+
 /**
  * Adds two numbers.
  * @customfunction
@@ -79,71 +82,85 @@ export function logMessage(message: string): string {
 export function addTwoNumbers3(first: number, second: number): number {
   return first + second;
 }
-// /**
-//  * Looks up a value in the Input Excel worksheet.
-//  * @customfunction
-//  * @param key Key to lookup in the table.
-//  * @param year Year to lookup in the table.
-//  * @returns The value found in the table.
-//  * @volatile
-//  */
-// async function getFinancials(key: string, year: number): Promise<number | unknown> {
-//   console.log("getFinancials", key, year);
-//   return new Promise((resolve, reject) => {
-//     enqueueLookup(key, year, resolve, reject);
-//   }).then((result) => {
-//     return result;
-//   }).catch((error) => {
-//     console.error(error);
-//   });
-// }
-
 
 /**
- * Retrieves the value from a table based on the specified row and column keys.
  * @customfunction
- * @param {string} rowKey The key to look for in the first column.
- * @param {number} columnYear The year to look for in the header row.
- * @param {string} tableRange The address of the table range.
- * @returns The value in the table that matches the row and column keys.
+ * @param key The string key to lookup in the Financials table
+ * @param year The year to lookup in the Financials table
+ * @returns
+ * @volatile
  */
-function getValueFromTable(rowKey, columnYear) {
-  Excel.run(async (context) => {
-    
-    const sheet = context.workbook.worksheets.getItem("Input")
-    const table = sheet.tables.getItem("FinancialsData");
-
-    // Load the table's headers and data.
-    table.columns.load("items/name");
-    table.rows.load("items/values");
-    await context.sync();
-
-    console.log("getValueFromTable", rowKey, columnYear);
-    
-    console.log("getValueFromTable", rowKey, columnYear);
-    // Find the column index for the given year.
-    const columnHeaders = table.columns.items.map(col => col.name);
-    console.log(columnHeaders);
-    const columnIndex = columnHeaders.indexOf(columnYear);
-
-    if (columnIndex === -1) {
-      const message = `Column year ${columnYear} not found. Please check that the year is in the correct format.`;
-      console.log(message);
-      return new CustomFunctions.Error(CustomFunctions.ErrorCode.invalidValue, message);
-    }
-
-    // Find the row index for the given key.
-    const rows = table.rows.items;
-    const rowIndex = rows.findIndex(row => row.values[0][0] === rowKey);
-
-    if (rowIndex === -1) {
-      const message = `Row key ${rowKey} not found. Please check that the key is in the correct format.`;
-      console.log(message);
-      return new CustomFunctions.Error(CustomFunctions.ErrorCode.invalidValue, message);
-    }
-
-    // Return the cell value.
-    const cellValue = rows[rowIndex].values[0][columnIndex];
-    return cellValue;
+export async function GetInputData(key, year) {
+  return new Promise((resolve, reject) => {
+    queue.push({ key, year, resolve, reject });
+    processQueue();
   });
+}
+
+/**
+ * The function that does the actual processing of the queue of table lookup calls
+ * @returns 
+ */
+async function processQueue() {
+  if (isProcessing || queue.length === 0) {
+    return;
+  }
+
+  isProcessing = true;
+
+  try {
+    await Excel.run(async (context) => {
+      console.log("Getting data from context");
+      const table = context.workbook.tables.getItem("FinancialsData");
+      const headers = table.getHeaderRowRange().load("values");
+      const keysRange = table.getDataBodyRange().getColumn(0).load("values");
+      const dataBodyRange = table.getDataBodyRange().load("values");
+
+      await context.sync();
+
+      while (queue.length > 0) {
+        console.log("Processing queue. Remaining items: ", queue.length);
+        const { key, year, resolve, reject } = queue.shift()!;
+
+        let errorMessage;
+
+        if (key === undefined || year === undefined || year === null || key === null) {
+          errorMessage = `Key ${key} or year ${year} is undefined`;
+          console.log(errorMessage);
+          reject(new CustomFunctions.Error(CustomFunctions.ErrorCode.invalidValue, errorMessage));
+          continue;
+        }
+
+        const headerValues = headers.values[0];
+        const keysValues = keysRange.values.map((row) => row[0]);
+
+        const yearIndex = headerValues.indexOf(year.toString());
+        const keyIndex = keysValues.indexOf(key);
+
+        // console.log("Header Values", headerValues);
+        // console.log("Keys Values", keysValues);
+        // console.log("Year Index", yearIndex);
+        // console.log("Key Index", keyIndex);
+
+        if (yearIndex === -1) {
+          reject(new CustomFunctions.Error(CustomFunctions.ErrorCode.invalidValue, `Year ${year} not found in headers`));
+          continue;
+        }
+
+        if (keyIndex === -1) {
+          reject(new CustomFunctions.Error(CustomFunctions.ErrorCode.invalidValue, `Key ${key} not found in keys`));
+          continue;
+        }
+
+        resolve(dataBodyRange.values[keyIndex][yearIndex]);
+      }
+    });
+  } catch (error) {
+    console.error("Error processing queue", error);
+  } finally {
+    isProcessing = false;
+    if (queue.length > 0) {
+      processQueue(); // Process remaining items in the queue
+    }
+  }
 }
