@@ -22,7 +22,8 @@ module.exports = async (env, options) => {
       polyfill: ["core-js/stable", "regenerator-runtime/runtime"],
       taskpane: ["./src/taskpane/taskpane.ts", "./src/taskpane/taskpane.html"],
       commands: "./src/commands/commands.ts",
-      functions: "./src/functions/functions.ts",
+      // functions: ["./src/functions/functions.ts", "./src/functions/helperFunctions.ts", "./src/functions/getFinancials.ts"],
+      functions: ["./src/functions/functions.ts"],
     },
     output: {
       clean: true,

@@ -22,7 +22,8 @@
     "stop": "office-addin-debugging stop manifest.xml",
     "validate": "office-addin-manifest validate manifest.xml",
     "watch": "webpack --mode development --watch",
-    "test": "jest"
+    "test": "jest",
+    "kill-port-watchers": "lsof -ti :3000 | xargs kill -9"
   },
   "dependencies": {
     "core-js": "^3.36.0",

@@ -399,3 +399,6 @@ FodyWeavers.xsd
 
 # npm build artefacts
 dist/
+
+
+.DS_Store
